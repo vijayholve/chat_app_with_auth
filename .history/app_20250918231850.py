@@ -8,85 +8,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flasgger import Swagger
-app = Flask(__name__)
-# app = Flask(__name__)
-# Define file paths and configuration
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-DB_PATH = os.path.join(BASE_DIR, "chat.db")
 
-# Configure the Flask app
+
+app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{DB_PATH}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8MB max upload
-
-# Initialize extensions
 swagger = Swagger(app)
+
 db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins='*', async_mode='eventlet')
 login_manager = LoginManager(app)
-
-# Configure login manager
 login_manager.login_view = 'login'
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-@app.route('/edit_room/<int:room_id>', methods=['GET', 'POST'])
-@login_required
-def edit_room(room_id):
-    room = Room.query.get_or_404(room_id)
-    if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        private = bool(request.form.get('private'))
-        if name:
-            room.name = name
-        room.private = private
-        db.session.commit()
-        flash('Room updated', 'success')
-        return redirect(url_for('dashboard'))
-    return render_template('edit_room.html', room=room)
-
-@app.route('/delete_room/<int:room_id>')
-@login_required
-def delete_room(room_id):
-    room = Room.query.get_or_404(room_id)
-    db.session.delete(room)
-    db.session.commit()
-    flash('Room deleted', 'info')
-    return redirect(url_for('dashboard'))
-
-# Edit and delete routes for User
-@app.route('/edit_user/<int:user_id>', methods=['GET', 'POST'])
-@login_required
-def edit_user(user_id):
-    user = User.query.get_or_404(user_id)
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        if username:
-            user.username = username
-        db.session.commit()
-        flash('User updated', 'success')
-        return redirect(url_for('dashboard'))
-    return render_template('edit_user.html', user=user)
-
-@app.route('/delete_user/<int:user_id>')
-@login_required
-def delete_user(user_id):
-    user = User.query.get_or_404(user_id)
-    db.session.delete(user)
-    db.session.commit()
-    flash('User deleted', 'info')
-    return redirect(url_for('dashboard'))
-# Dashboard route
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    rooms = Room.query.all()
-    users = User.query.all()
-    return render_template('dashboard.html', rooms=rooms, users=users)
-
-
 
 # Models
 

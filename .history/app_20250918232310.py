@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flasgger import Swagger
 app = Flask(__name__)
-# app = Flask(__name__)
+app = Flask(__name__)
 # Define file paths and configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")

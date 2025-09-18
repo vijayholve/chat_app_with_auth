@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block content %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+<div class="dashboard">
+  <h1>Dashboard</h1>
+  <h2>Rooms</h2>
+  <table id="roomsTable">
+    <thead><tr><th>ID</th><th>Name</th><th>Private</th><th>Owner</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for room in rooms %}
+      <tr>
+        <td>{{ room.id }}</td>
+        <td>{{ room.name }}</td>
+        <td>{{ 'Yes' if room.private else 'No' }}</td>
+        <td>{{ room.owner_id }}</td>
+        <td>
+          <a href="{{ url_for('edit_room', room_id=room.id) }}">Edit</a> |
+          <a href="{{ url_for('delete_room', room_id=room.id) }}" onclick="return confirm('Delete this room?')">Delete</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h2>Users</h2>
+  <table id="usersTable">
+    <thead><tr><th>ID</th><th>Username</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for user in users %}
+      <tr>
+        <td>{{ user.id }}</td>
+        <td>{{ user.username }}</td>
+        <td>
+          <a href="{{ url_for('edit_user', user_id=user.id) }}">Edit</a> |
+          <a href="{{ url_for('delete_user', user_id=user.id) }}" onclick="return confirm('Delete this user?')">Delete</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

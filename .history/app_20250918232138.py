@@ -8,28 +8,23 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flasgger import Swagger
+
+
 app = Flask(__name__)
-# app = Flask(__name__)
-# Define file paths and configuration
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8MB max upload
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{DB_PATH}"
+swagger = Swagger(app)
+db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins='*', async_mode='eventlet')
+login_manager = LoginManager(app) 
+login_manager.login_view = 'login'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
 DB_PATH = os.path.join(BASE_DIR, "chat.db")
 
-# Configure the Flask app
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev_secret_key')
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{DB_PATH}"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8MB max upload
-
-# Initialize extensions
-swagger = Swagger(app)
-db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins='*', async_mode='eventlet')
-login_manager = LoginManager(app)
-
-# Configure login manager
-login_manager.login_view = 'login'
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 @app.route('/edit_room/<int:room_id>', methods=['GET', 'POST'])

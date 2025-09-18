@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2>Edit Room</h2>
+<form method="post">
+  <label>Name: <input name="name" value="{{ room.name }}" required></label><br>
+  <label>Private: <input type="checkbox" name="private" {% if room.private %}checked{% endif %}></label><br>
+  <button type="submit">Save</button>
+  <a href="{{ url_for('dashboard') }}">Cancel</a>
+</form>
+{% endblock %}

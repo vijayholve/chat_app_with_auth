@@ -14,9 +14,7 @@
     <div class="brand"><a href="{{ url_for('index') }}">Chat with 💓</a></div>
     <div class="nav-right">
       {% if current_user.is_authenticated %}
-
-
-        <a class="btn" href="{{ url_for('dashboard') }}">Dashboard</a>
+      {% comment %} show dashoboard {% endcomment %}
         <span class="who">Hello, {{ current_user.username }}</span>
         <a class="btn" href="{{ url_for('logout') }}">Logout</a>
       {% else %}

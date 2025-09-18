@@ -1,0 +1,9 @@
+{% extends 'layout.html' %}
+{% block content %}
+  <h2>Edit User</h2>
+  <form method="post">
+    <label>Username:<input name="username" value="{{ user.username }}" required /></label><br />
+    <button type="submit">Save</button>
+    <a href="{{ url_for('dashboard') }}">Cancel</a>
+  </form>
+{% endblock %}
