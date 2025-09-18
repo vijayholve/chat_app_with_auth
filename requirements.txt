@@ -1,0 +1,8 @@
+Flask
+flask-socketio
+eventlet
+Flask-SQLAlchemy
+Flask-Login
+python-dotenv
+Werkzeug
+flasgger

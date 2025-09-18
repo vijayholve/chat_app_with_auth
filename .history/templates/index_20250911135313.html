@@ -1,0 +1,66 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="left">
+    <h1>Rooms</h1>
+    <ul class="room-list">
+      {% for r in rooms %}
+        <li>
+          <form method="post" action="{{ url_for('join_room_route') }}" class="inline-form">
+            <input type="hidden" name="room" value="{{ r.name }}"/>
+            <button class="roomBtn" type="submit">
+              {{ r.name }} {% if r.private %}🔒{% endif %}
+            </button>
+          </form>
+        </li>
+      {% endfor %}
+    </ul>
+
+    <h3>Create Room</h3>
+    <form method="post" action="{{ url_for('create_room') }}" class="create-room-form">
+      <input name="room_name" placeholder="room name" required />
+      <label><input type="checkbox" name="private"/> Private</label>
+      <button type="submit">Create</button>
+    </form>
+
+    <h3>Upload Image</h3>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <input type="file" name="file" id="fileInput" accept="image/*"/>
+      <button id="uploadBtn" type="button">Upload</button>
+      <div id="preview"></div>
+    </form>
+  </aside>
+
+  <!-- Main Chat Area -->
+  <main class="main">
+    <header class="top">
+      <div id="currentRoom">Room: global</div>
+      <div id="typingIndicator" class="typing"></div>
+    </header>
+
+    <!-- Call Section -->
+    <section class="call-panel">
+      <button id="callBtn">📞 Call</button>
+      <div class="video-container">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <video id="remoteVideo" autoplay playsinline></video>
+      </div>
+    </section>
+
+    <!-- Messages -->
+    <section id="messages" class="messages"></section>
+
+    <!-- Message Form -->
+    <form id="messageForm" class="message-form" autocomplete="off">
+      <input id="messageInput" placeholder="Type a message..." required />
+      <input type="hidden" id="attachmentUrl" />
+      <button type="submit">Send</button>
+    </form>
+  </main>
+</div>
+
+<!-- Scripts -->
+<script src="{{ url_for('static', filename='js/chat_auth.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+{% endblock %}
