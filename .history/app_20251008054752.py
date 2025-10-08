@@ -94,6 +94,25 @@ def dashboard():
 
 
 # Models
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """
+    Upload an image file
+    ---
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: file
+        in: formData
+        type: file
+        required: true
+    responses:
+      200:
+        description: File uploaded successfully
+    """
+    # your upload logic...
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)

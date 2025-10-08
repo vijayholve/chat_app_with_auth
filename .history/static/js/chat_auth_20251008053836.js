@@ -154,10 +154,11 @@
   // --- END: AUDIO RECORDING VARIABLES & SETUP ---
 
 
-  // Utility to check if attachment is audio
+// Utility to check if attachment is audio
   function isAudioAttachment(url) {
     if (!url) return false;
     const ext = url.split('.').pop().toLowerCase();
+    // CRITICAL: Ensure 'webm' is included here.
     return ['mp3', 'ogg', 'wav', 'webm', 'm4a'].includes(ext);
   }
 

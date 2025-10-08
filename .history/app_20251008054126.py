@@ -94,6 +94,7 @@ def dashboard():
 
 
 # Models
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
@@ -308,7 +309,6 @@ def join_room_route():
     flash(f'Joined {room_name}', 'success')
     return redirect(url_for('index'))
 
-
 @app.route('/history')
 @login_required
 def history():
@@ -318,43 +318,29 @@ def history():
     return jsonify([m.serialize() for m in reversed(msgs)])
 
 # upload endpoint
-ALLOWED_EXT = {'png','jpg','jpeg','gif','webp', 'mp3', 'ogg', 'wav', 'm4a', 'webm'} 
+ALLOWED_EXT = {'png','jpg','jpeg','gif','webp'}
 def allowed_filename(fname):
     ext = fname.rsplit('.',1)[-1].lower() if '.' in fname else ''
     return ext in ALLOWED_EXT
 
 @app.route('/upload', methods=['POST'])
 @login_required
-def upload(): # This is the functional upload route
+def upload():
     if 'file' not in request.files:
         return jsonify({"error":"no file"}), 400
     f = request.files['file']
     if f.filename == '':
         return jsonify({"error":"empty filename"}), 400
-    
-    # Use f.filename (as sent by the client) to check file type
     if not allowed_filename(f.filename):
         return jsonify({"error":"invalid file type"}), 400
-    
     filename = secure_filename(f.filename)
     # avoid collisions
     timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S%f')
     filename = f"{timestamp}_{filename}"
     path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    
-    try:
-        f.save(path)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        # Ensure a valid JSON response is returned on failure
-        return jsonify({"error": "Internal server error: File save failed. Check server permissions."}), 500
-
+    f.save(path)
     url = url_for('uploaded_file', filename=filename)
-    # Ensure a valid JSON response is returned on success
     return jsonify({"url": url})
-# --- END: Corrected File Upload Utilities and Route ---
-
 
 # mark read (REST)
 @app.route('/mark_read', methods=['POST'])
