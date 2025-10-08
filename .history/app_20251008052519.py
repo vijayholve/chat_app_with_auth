@@ -8,8 +8,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flasgger import Swagger
-from datetime import datetime, timedelta # IMPORT timedelta
-
 app = Flask(__name__)
 # app = Flask(__name__)
 # Define file paths and configuration
@@ -170,19 +168,8 @@ def load_user(user_id):
 @login_required
 def index():
     rooms = Room.query.all()
-    # Fetch all users who have set a status. We look back up to 7 days.
-    time_limit = datetime.utcnow() - timedelta(days=7)
-    users_with_status = db.session.query(User).filter(
-        (User.status != None) | (User.status_timestamp >= time_limit)
-    ).order_by(User.status_timestamp.desc()).all()
-    
-    # Filter out the current user for the 'Recent User Statuses' list
-    users_for_status_list = [u for u in users_with_status if u.id != current_user.id]
+    return render_template('index.html', rooms=rooms, current_user=current_user)
 
-    return render_template('index.html', 
-        rooms=rooms, 
-        users_with_status=users_for_status_list, 
-        current_user=current_user)
 # --- START: New Set Status Route ---
 
 # --- START: New Set Status Route ---
@@ -226,8 +213,6 @@ def register():
             return redirect(url_for('register'))
         u = User(username=username)
         u.set_password(password)
-        u.status = "Just joined the chat!" 
-        u.status_timestamp = datetime.utcnow()
         db.session.add(u)
         db.session.commit()
         login_user(u)

@@ -1,0 +1,292 @@
+// Client-side chat logic with attachments and auth
+(() => {
+  const socket = io();
+
+  let currentRoom = window.INIT_ROOM || "global";
+  const currentRoomDiv = document.getElementById("currentRoom");
+  const messagesDiv = document.getElementById("messages");
+  const messageForm = document.getElementById("messageForm");
+  const messageInput = document.getElementById("messageInput");
+  const attachmentUrlInput = document.getElementById("attachmentUrl");
+  const typingIndicator = document.getElementById("typingIndicator");
+
+  function appendMessage(m, isOwn = false) {
+    const el = document.createElement("div");
+    el.className = "msg" + (isOwn ? " own" : "");
+    el.dataset.msgId = m.id;
+    const head = document.createElement("div");
+    head.className = "head";
+    head.textContent = `${m.sender} • ${new Date(
+      m.timestamp
+    ).toLocaleString()}`;
+    if (isOwn) {
+      const delBtn = document.createElement("span");
+      delBtn.className = "delete-btn";
+      messagesDiv.appendChild(el);
+      attachMessageBehaviors(el, m);
+      delBtn.textContent = "🗑️";
+      delBtn.style.cursor = "pointer";
+      delBtn.style.marginLeft = "10px";
+      delBtn.onclick = function (e) {
+        e.stopPropagation();
+        // if (!confirm("Delete this message?")) return;
+        fetch(`/delete_message/${m.id}`, { method: "POST" })
+          .then((r) => r.json())
+          .then((j) => {
+            if (j.success) {
+              el.remove();
+            } else {
+              alert(j.error || "Delete failed");
+            }
+          });
+      };
+      head.appendChild(delBtn);
+    }
+    const body = document.createElement("div");
+    body.className = "body";
+    if (m.text) body.textContent = m.text;
+    if (m.attachment) {
+      const a = document.createElement("a");
+      a.href = m.attachment;
+      a.target = "_blank";
+      const img = document.createElement("img");
+      img.src = m.attachment;
+      img.className = "preview-img";
+      a.appendChild(img);
+      body.appendChild(a);
+    }
+    el.appendChild(head);
+    el.appendChild(body);
+    // reactions container
+    const reactWrap = document.createElement("div");
+    reactWrap.className = "reactions";
+    // render existing reactions
+    const reactions = m.reactions || {};
+    function renderReactions() {
+      reactWrap.innerHTML = "";
+      // common emojis to show as quick react options
+      const quick = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
+      quick.forEach((emoji) => {
+        const btn = document.createElement("button");
+        btn.className = "react-btn";
+        btn.textContent =
+          emoji + (reactions[emoji] ? " " + reactions[emoji].length : "");
+        btn.onclick = (ev) => {
+          ev.stopPropagation();
+          socket.emit("toggle_reaction", { msg_id: m.id, emoji });
+        };
+        reactWrap.appendChild(btn);
+      });
+      // show custom reactions (others)
+      Object.keys(reactions).forEach((e) => {
+        if (quick.indexOf(e) === -1) {
+          const span = document.createElement("span");
+          span.className = "react-summary";
+          span.textContent = `${e} ${reactions[e].length}`;
+          reactWrap.appendChild(span);
+        }
+      });
+    }
+    renderReactions();
+    el.appendChild(reactWrap);
+    messagesDiv.appendChild(el);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+
+  function loadHistory(room) {
+    fetch(`/history?room=${encodeURIComponent(room)}&limit=200`)
+      .then((r) => r.json())
+      .then((arr) => {
+        messagesDiv.innerHTML = "";
+        arr.forEach((m) =>
+          appendMessage(m, m.sender === (window.USERNAME || ""))
+        );
+      })
+      .catch((err) => console.error("history err", err));
+  }
+    // We render messages server-side from DB; attach behaviors to existing messages
+    function attachMessageBehaviors(el, mdata) {
+      // mdata may be provided for newly appended messages; for server-rendered ones, try to read dataset
+      const id = mdata && mdata.id ? mdata.id : el.dataset.msgId;
+      const sender = mdata && mdata.sender ? mdata.sender : (el.querySelector('.head')?.textContent || '').split(' • ')[0];
+      // attach delete button if owned
+      if (sender === (window.USERNAME || '')) {
+        // ensure delete button exists
+        let del = el.querySelector('.delete-btn');
+        if (!del) {
+          del = document.createElement('span');
+          del.className = 'delete-btn';
+          del.textContent = '🗑️';
+          del.style.cursor = 'pointer';
+          el.querySelector('.head').appendChild(del);
+        }
+        del.onclick = (ev) => {
+          ev.stopPropagation();
+          fetch(`/delete_message/${id}`, { method: 'POST' })
+            .then(r => r.json())
+            .then(j => { if (j.success) el.remove(); else alert(j.error || 'Delete failed'); });
+      }
+
+      // render reaction buttons
+      const existingReactions = mdata && mdata.reactions ? mdata.reactions : {};
+      const reactWrap = el.querySelector('.reactions') || (() => { const d=document.createElement('div'); d.className='reactions'; el.appendChild(d); return d; })();
+      reactWrap.innerHTML = '';
+      const quick = ['👍','❤️','😂','😮','😢','🎉'];
+      quick.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.className = 'react-btn';
+        btn.textContent = emoji + (existingReactions[emoji] ? ' ' + existingReactions[emoji].length : '');
+        btn.onclick = (ev) => { ev.stopPropagation(); socket.emit('toggle_reaction', { msg_id: id, emoji }); };
+        reactWrap.appendChild(btn);
+      });
+      Object.keys(existingReactions).forEach(e => { if (quick.indexOf(e)===-1) { const s=document.createElement('span'); s.className='react-summary'; s.textContent=`${e} ${existingReactions[e].length}`; reactWrap.appendChild(s); } });
+    }
+
+  // handle room buttons: update room name and load messages
+  document.querySelectorAll(".roomBtn").forEach((btn) => {
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      const form = this.closest("form");
+      const room = form.querySelector('input[name="room"]').value;
+      currentRoom = room;
+      currentRoomDiv.textContent = "Room: " + room;
+        // page will redirect to server and render messages from DB
+        form.submit();
+      // Optionally, emit join event if using socketio for room switching
+      socket.emit("join", { room });
+    });
+  });
+  // Upload flow
+  const uploadBtn = document.getElementById("uploadBtn");
+  const fileInput = document.getElementById("fileInput");
+  const previewDiv = document.getElementById("preview");
+
+  uploadBtn.addEventListener("click", () => {
+    const f = fileInput.files[0];
+    if (!f) return alert("Choose a file");
+    const fd = new FormData();
+    fd.append("file", f);
+    uploadBtn.disabled = true;
+    fetch("/upload", { method: "POST", body: fd })
+      .then((r) => r.json())
+      .then((j) => {
+        uploadBtn.disabled = false;
+        if (j.error) return alert(j.error);
+        attachmentUrlInput.value = j.url;
+        previewDiv.innerHTML = "";
+        const img = document.createElement("img");
+        img.src = j.url;
+        img.className = "preview-img";
+        previewDiv.appendChild(img);
+      })
+      .catch((err) => {
+        uploadBtn.disabled = false;
+        console.error(err);
+        alert("Upload failed");
+      });
+  });
+
+  // message send
+  messageForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = messageInput.value.trim();
+    const attachment = attachmentUrlInput.value || null;
+    if (!text && !attachment) return;
+    socket.emit("send_message", { room: currentRoom, text, attachment });
+    // optimistic UI
+    appendMessage(
+      {
+        sender: window.USERNAME || "Me",
+        text,
+        attachment,
+        timestamp: new Date().toISOString(),
+      },
+      true
+    );
+    messageInput.value = "";
+    attachmentUrlInput.value = "";
+    document.getElementById("preview").innerHTML = "";
+  });
+
+  // socket events
+  socket.on("connected", (d) => {
+    // server tells username
+    if (d && d.username) {
+      window.USERNAME = d.username;
+    }
+    // auto-join initial room
+    currentRoomDiv.textContent = "Room: " + currentRoom;
+    socket.emit("join", { room: currentRoom });
+      // attach behaviors to server-rendered messages
+      document.querySelectorAll('.msg').forEach(el => attachMessageBehaviors(el));
+  });
+
+    // When a new message arrives via socket, append and attach behaviors
+    socket.on('new_message', (m) => {
+      appendMessage(m, m.sender === window.USERNAME);
+    });
+
+  // socket.on("new_message", (m) => {
+  //   appendMessage(m, m.sender === window.USERNAME);
+  // });
+
+  // Listen for delete_message event from server
+  socket.on("delete_message", (data) => {
+    const msgId = data.id;
+    const msgEl = document.querySelector(`.msg[data-msg-id='${msgId}']`);
+    if (msgEl) msgEl.remove();
+  });
+
+  // reaction updates
+  socket.on("reaction_update", (d) => {
+    const msgEl = document.querySelector(`.msg[data-msg-id='${d.msg_id}']`);
+    if (!msgEl) return;
+    // find reactions container
+    const reactWrap = msgEl.querySelector(".reactions");
+    if (!reactWrap) return;
+    // update stored reactions on the element's message object if present
+    // recreate the buttons
+    const reactions = d.reactions || {};
+    reactWrap.innerHTML = "";
+    const quick = ["👍", "❤️", "😂", "😮", "😢", "🎉"];
+    quick.forEach((emoji) => {
+      const btn = document.createElement("button");
+      btn.className = "react-btn";
+      btn.textContent =
+        emoji + (reactions[emoji] ? " " + reactions[emoji].length : "");
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        socket.emit("toggle_reaction", { msg_id: d.msg_id, emoji });
+      };
+      reactWrap.appendChild(btn);
+    });
+    Object.keys(reactions).forEach((e) => {
+      if (quick.indexOf(e) === -1) {
+        const span = document.createElement("span");
+        span.className = "react-summary";
+        span.textContent = `${e} ${reactions[e].length}`;
+        reactWrap.appendChild(span);
+      }
+    });
+  });
+
+  socket.on("user_typing", (d) => {
+    if (d.room !== currentRoom) return;
+    typingIndicator.textContent = d.typing ? d.username + " is typing..." : "";
+  });
+
+  // typing events
+  let typingTimer = null;
+  const TYPING_TIMEOUT = 1200;
+  messageInput.addEventListener("input", () => {
+    socket.emit("typing", { room: currentRoom, typing: true });
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(
+      () => socket.emit("typing", { room: currentRoom, typing: false }),
+      TYPING_TIMEOUT
+    );
+  });
+
+  // initial load
+  // username is set by server on connect event
+})();

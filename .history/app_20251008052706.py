@@ -226,8 +226,7 @@ def register():
             return redirect(url_for('register'))
         u = User(username=username)
         u.set_password(password)
-        u.status = "Just joined the chat!" 
-        u.status_timestamp = datetime.utcnow()
+        
         db.session.add(u)
         db.session.commit()
         login_user(u)

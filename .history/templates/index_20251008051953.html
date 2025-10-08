@@ -15,20 +15,23 @@
           </form>
         </li>
       {% endfor %}
-    </ul><div class="hr"></div>
+    </ul>
+     <div class="hr"></div>
 
     <h3>Recent User Statuses</h3>
-    <ul class="room-list" id="userStatusList">
+    <ul class="room-list">
         {% for user in users_with_status %}
-          <li data-username="{{ user.username }}">
+        {% if user.username != current_user.username %}
+          <li>
             <strong>{{ user.username }}</strong>
-            <span class="badge" title="Last updated">{{ user.status_timestamp.strftime('%H:%M') if user.status_timestamp else '' }}</span>
+            <span class="badge">{{ (user.status_timestamp.strftime('%H:%M') if user.status_timestamp) or '' }}</span>
             <p class="user-status">{{ user.status | default('No Status') }}</p>
           </li>
+        {% endif %}
         {% endfor %}
     </ul>
     <div class="hr"></div>
-    
+
     <h3>Create Room</h3>
     <form method="post" action="{{ url_for('create_room') }}" class="create-room-form">
       <input name="room_name" placeholder="room name" required />

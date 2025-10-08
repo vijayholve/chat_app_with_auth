@@ -8,8 +8,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flasgger import Swagger
-from datetime import datetime, timedelta # IMPORT timedelta
-
 app = Flask(__name__)
 # app = Flask(__name__)
 # Define file paths and configuration
@@ -226,8 +224,6 @@ def register():
             return redirect(url_for('register'))
         u = User(username=username)
         u.set_password(password)
-        u.status = "Just joined the chat!" 
-        u.status_timestamp = datetime.utcnow()
         db.session.add(u)
         db.session.commit()
         login_user(u)

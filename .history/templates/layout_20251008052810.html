@@ -17,12 +17,6 @@
 
 
         <a class="btn" href="{{ url_for('dashboard') }}">Dashboard</a>
-        <div class="who-container">
-            <span class="who">Hello, {{ current_user.username }}</span>
-            {% if current_user.status %}
-                <span class="current-status" title="Your Status: {{ current_user.status }}">| {{ current_user.status }}</span>
-            {% endif %}
-        </div>
         <span class="who">Hello, {{ current_user.username }}</span>
         <a class="btn" href="{{ url_for('logout') }}">Logout</a>
       {% else %}

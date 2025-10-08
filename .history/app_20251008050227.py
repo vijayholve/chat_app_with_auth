@@ -1,6 +1,7 @@
 # Edit and delete routes for Room 
 import os
 from datetime import datetime
+import json
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -8,8 +9,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from flasgger import Swagger
-from datetime import datetime, timedelta # IMPORT timedelta
-
 app = Flask(__name__)
 # app = Flask(__name__)
 # Define file paths and configuration
@@ -114,8 +113,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(200), nullable=False)
-    status = db.Column(db.String(140), nullable=True, default="Available")
-    status_timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
     def set_password(self, pw):
         self.password_hash = generate_password_hash(pw)
 
@@ -141,6 +139,8 @@ class Message(db.Model):
     attachment = db.Column(db.String(300), nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     read = db.Column(db.Boolean, default=False)
+    # reactions stored as JSON string mapping emoji -> list of usernames who reacted
+    reactions = db.Column(db.Text, nullable=True, default='{}')
 
     def serialize(self):
         return {
@@ -151,6 +151,7 @@ class Message(db.Model):
             "attachment": self.attachment,
             "timestamp": self.timestamp.isoformat() + "Z",
             "read": bool(self.read),
+            "reactions": json.loads(self.reactions) if self.reactions else {},
         }
 
 with app.app_context():
@@ -160,6 +161,26 @@ with app.app_context():
         r = Room(name='global', private=False)
         db.session.add(r)
         db.session.commit()
+    # ensure 'reactions' column exists (for older DBs) and backfill
+    try:
+        cols = [row[1] for row in db.session.execute("PRAGMA table_info('message')")]
+    except Exception:
+        cols = []
+    if 'reactions' not in cols:
+        try:
+            db.session.execute("ALTER TABLE message ADD COLUMN reactions TEXT")
+            db.session.commit()
+        except Exception as e:
+            print('Could not add reactions column:', e)
+    # backfill reactions for existing messages
+    try:
+        msgs = Message.query.filter((Message.reactions == None) | (Message.reactions == '')).all()
+        for m in msgs:
+            m.reactions = json.dumps({})
+        db.session.commit()
+    except Exception as e:
+        # if column still missing or other error, print and continue
+        print('Backfill reactions skipped/error:', e)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -170,46 +191,11 @@ def load_user(user_id):
 @login_required
 def index():
     rooms = Room.query.all()
-    # Fetch all users who have set a status. We look back up to 7 days.
-    time_limit = datetime.utcnow() - timedelta(days=7)
-    users_with_status = db.session.query(User).filter(
-        (User.status != None) | (User.status_timestamp >= time_limit)
-    ).order_by(User.status_timestamp.desc()).all()
-    
-    # Filter out the current user for the 'Recent User Statuses' list
-    users_for_status_list = [u for u in users_with_status if u.id != current_user.id]
-
-    return render_template('index.html', 
-        rooms=rooms, 
-        users_with_status=users_for_status_list, 
-        current_user=current_user)
-# --- START: New Set Status Route ---
-
-# --- START: New Set Status Route ---
-@app.route('/set_status', methods=['POST'])
-@login_required
-def set_status():
-    new_status = request.form.get('new_status', '').strip()
-    
-    if len(new_status) > 140:
-        flash('Status must be less than 140 characters.', 'danger')
-        return redirect(url_for('index'))
-    
-    current_user.status = new_status
-    current_user.status_timestamp = datetime.utcnow()
-    db.session.commit()
-    
-    flash('Status updated successfully!', 'success')
-    
-    # Optional: Emit a WebSocket event to instantly update everyone's sidebar status list
-    # socketio.emit('status_update', {
-    #     'username': current_user.username,
-    #     'status': current_user.status,
-    #     'timestamp': current_user.status_timestamp.isoformat() + 'Z'
-    # }, broadcast=True)
-    
-    return redirect(url_for('index'))
-# --- END: New Set Status Route ---
+    room = request.args.get('room', 'global')
+    # load messages for this room from DB (most recent first, then reverse)
+    msgs = Message.query.filter_by(room=room).order_by(Message.id.desc()).limit(200).all()
+    messages = [m.serialize() for m in reversed(msgs)]
+    return render_template('index.html', rooms=rooms, current_user=current_user, current_room=room, messages=messages)
 
 @app.route('/register', methods=['GET','POST'])
 def register():
@@ -226,8 +212,6 @@ def register():
             return redirect(url_for('register'))
         u = User(username=username)
         u.set_password(password)
-        u.status = "Just joined the chat!" 
-        u.status_timestamp = datetime.utcnow()
         db.session.add(u)
         db.session.commit()
         login_user(u)
@@ -282,7 +266,7 @@ def create_room():
     db.session.add(m)
     db.session.commit()
     flash('Room created', 'success')
-    return redirect(url_for('index'))
+    return redirect(url_for('index', room=r.name))
 @app.route("/delete_message/<int:msg_id>", methods=["POST"])
 @login_required
 def delete_message(msg_id):
@@ -322,7 +306,7 @@ def join_room_route():
             db.session.add(RoomMember(room_id=r.id, user_id=current_user.id))
             db.session.commit()
     flash(f'Joined {room_name}', 'success')
-    return redirect(url_for('index'))
+    return redirect(url_for('index', room=room_name))
 
 @app.route('/history')
 @login_required
@@ -404,11 +388,37 @@ def handle_send_message(data):
         if not member:
             emit('error', {'msg':'access denied to private room'})
             return
-    msg = Message(room=room, sender=current_user.username, text=text if text else None, attachment=attachment)
+    msg = Message(room=room, sender=current_user.username, text=text if text else None, attachment=attachment, reactions=json.dumps({}))
     db.session.add(msg)
     db.session.commit()
     payload = msg.serialize()
     emit('new_message', payload, room=room)
+
+
+@socketio.on('toggle_reaction')
+def handle_toggle_reaction(data):
+    # data: { msg_id: int, emoji: str }
+    msg_id = data.get('msg_id')
+    emoji = data.get('emoji')
+    if not msg_id or not emoji:
+        return
+    msg = Message.query.get(msg_id)
+    if not msg:
+        return
+    reactions = json.loads(msg.reactions) if msg.reactions else {}
+    users = set(reactions.get(emoji, []))
+    if current_user.username in users:
+        users.remove(current_user.username)
+    else:
+        users.add(current_user.username)
+    if users:
+        reactions[emoji] = list(users)
+    else:
+        reactions.pop(emoji, None)
+    msg.reactions = json.dumps(reactions)
+    db.session.commit()
+    # broadcast update
+    emit('reaction_update', {'msg_id': msg.id, 'reactions': reactions}, room=msg.room)
 
 @socketio.on('typing')
 def handle_typing(data):

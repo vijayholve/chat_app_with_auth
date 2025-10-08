@@ -15,14 +15,13 @@
     <div class="nav-right">
       {% if current_user.is_authenticated %}
 
-
-        <a class="btn" href="{{ url_for('dashboard') }}">Dashboard</a>
-        <div class="who-container">
+  <div class="who-container">
             <span class="who">Hello, {{ current_user.username }}</span>
             {% if current_user.status %}
-                <span class="current-status" title="Your Status: {{ current_user.status }}">| {{ current_user.status }}</span>
+                <span class="current-status">| {{ current_user.status }}</span>
             {% endif %}
         </div>
+        <a class="btn" href="{{ url_for('dashboard') }}">Dashboard</a>
         <span class="who">Hello, {{ current_user.username }}</span>
         <a class="btn" href="{{ url_for('logout') }}">Logout</a>
       {% else %}
